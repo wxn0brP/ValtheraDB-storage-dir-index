@@ -1,0 +1,45 @@
+{
+	"name": "@wxn0brp/db-storage-dir-index",
+	"version": "0.0.1",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"description": "",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/wxn0brP/ValtheraDB-storage-dir-index.git"
+	},
+	"homepage": "https://github.com/wxn0brP/ValtheraDB-storage-dir-index",
+	"author": "wxn0brP",
+	"license": "MIT",
+	"type": "module",
+	"scripts": {
+		"build": "tsc && tsc-alias",
+		"start": "node dist/index.js"
+	},
+	"peerDependencies": {
+		"@wxn0brp/db-core": "~0.4.0",
+		"@wxn0brp/db-storage-dir": "~0.1.7"
+	},
+	"devDependencies": {
+		"@types/node": "*",
+		"@wxn0brp/db": "^0.42.0",
+		"@wxn0brp/db-core": "^0.4.0",
+		"@wxn0brp/db-storage-dir": "^0.1.7",
+		"typescript": "*"
+	},
+	"files": [
+		"dist"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./*": {
+			"types": "./dist/*.d.ts",
+			"import": "./dist/*.js",
+			"default": "./dist/*.js"
+		}
+	}
+}
