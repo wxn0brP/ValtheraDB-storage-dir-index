@@ -18,13 +18,14 @@
 	},
 	"peerDependencies": {
 		"@wxn0brp/db-core": "~0.4.0",
-		"@wxn0brp/db-storage-dir": "~0.1.7"
+		"@wxn0brp/db-storage-dir": "~0.1.8"
 	},
 	"devDependencies": {
+		"@types/bun": "*",
 		"@types/node": "*",
-		"@wxn0brp/db": "^0.42.0",
-		"@wxn0brp/db-core": "^0.4.0",
-		"@wxn0brp/db-storage-dir": "^0.1.7",
+		"@wxn0brp/db": "~0.42.0",
+		"@wxn0brp/db-core": "~0.4.0",
+		"@wxn0brp/db-storage-dir": "~0.1.8",
 		"typescript": "*"
 	},
 	"files": [

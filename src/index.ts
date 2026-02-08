@@ -1,9 +1,11 @@
 import { ValtheraClass } from "@wxn0brp/db-core";
+import { VQuery } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { FileActionsUtils } from "@wxn0brp/db-storage-dir/action.utils";
 import { access, readFile } from "fs/promises";
 import { join } from "path";
 import { IndexConfig } from "./types";
+import { removeFromIndex } from "./utils";
 
 export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConfig) {
     const dbAction = db.dbAction as FileActions;
@@ -60,6 +62,8 @@ export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConf
                 return requiredFiles.get(index);
             });
 
+        query.context._dirIndex_files = filteredFiles;
+
         return filteredFiles;
     }
 
@@ -68,14 +72,20 @@ export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConf
     const proxy = new Proxy(dbAction, {
         get(target, prop, receiver) {
             const value = target[prop];
-            // const propString = prop.toString();
+            const propString = prop.toString();
 
-            // if (propString === "remove") {
-            //     return async (query: VQuery) => {
-            //         const result = await value.bind(receiver)(query);
-            //         return result;
-            //     }
-            // }
+            if (propString.includes("remove")) {
+                return async (query: VQuery) => {
+                    const result = await value.bind(receiver)(query);
+                    await removeFromIndex(
+                        dbAction,
+                        query,
+                        indexConfig[query.collection],
+                        propString.includes("One")
+                    );
+                    return result;
+                }
+            }
             return value;
         }
     });
