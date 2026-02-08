@@ -26,6 +26,7 @@
 		"@wxn0brp/db": "~0.42.0",
 		"@wxn0brp/db-core": "~0.4.0",
 		"@wxn0brp/db-storage-dir": "~0.1.8",
+		"tsc-alias": "*",
 		"typescript": "*"
 	},
 	"files": [
