@@ -1,29 +1,104 @@
-import Data from "@wxn0brp/db-core/types/data";
 import { VQuery } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { access, readFile, writeFile } from "fs/promises";
 import { join } from "path";
+import { split } from "./vars";
 
 export async function createIndex(action: FileActions, collection: string, keys: string[]) {
     const files = await action.utils.getSortedFiles(join(action.folder, collection), {});
 
-    const allData: Data[][] = [];
-
-    for (const file of files) {
-        const data = await action.fileCpu.find(join(action.folder, collection, file), {});
-        if (!data) continue;
-        allData.push(data);
-    }
-
     for (const key of keys) {
-        const index: any[][] = [];
+        const indexEntries: { value: any, file: number }[] = [];
 
-        for (const data of allData) {
-            index.push(data.map(d => d[key]));
+        for (const file of files) {
+            const fileNumber = parseInt(file.replace(".db", ""), 10);
+            const data = await action.fileCpu.find(join(action.folder, collection, file), {});
+            if (!data) continue;
+
+            for (const doc of data) {
+                if (doc[key] !== undefined) {
+                    indexEntries.push({ value: doc[key], file: fileNumber });
+                }
+            }
         }
 
-        await writeFile(join(action.folder, collection, `${key}.json`), JSON.stringify(index));
+        indexEntries.sort((a, b) => {
+            if (typeof a.value === "string" && typeof b.value === "string") {
+                const cmp = a.value.localeCompare(b.value);
+                if (cmp !== 0) return cmp;
+            } else {
+                if (a.value < b.value) return -1;
+                if (a.value > b.value) return 1;
+            }
+
+            if (a.file < b.file) return -1;
+            if (a.file > b.file) return 1;
+            return 0;
+        });
+
+        const indexContent = indexEntries.map(entry => `${entry.value}${split}${entry.file}`).join("\n");
+        await writeFile(join(action.folder, collection, `${key}.idx`), indexContent);
     }
+}
+
+export async function findIndex(action: FileActions, collection: string, key: string, value: any): Promise<number[]> {
+    const indexPath = join(action.folder, collection, `${key}.idx`);
+    try {
+        await access(indexPath);
+    } catch {
+        return [];
+    }
+
+    const indexContent = await readFile(indexPath, "utf-8");
+    const lines = indexContent.split("\n");
+
+    const results: number[] = [];
+
+    let low = 0;
+    let high = lines.length - 1;
+    let firstOccurrence = -1;
+
+    while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const line = lines[mid];
+        if (!line) {
+            // Handle empty lines if any (usually at end)
+            high = mid - 1;
+            continue;
+        }
+        const [midValue] = line.split(split);
+        const parsedMidValue = isNaN(Number(midValue)) ? midValue : Number(midValue);
+
+        if (parsedMidValue < value) {
+            low = mid + 1;
+        } else if (parsedMidValue > value) {
+            high = mid - 1;
+        } else {
+            firstOccurrence = mid;
+            high = mid - 1;
+        }
+    }
+
+    if (firstOccurrence === -1) {
+        return [];
+    }
+
+    for (let i = firstOccurrence; i < lines.length; i++) {
+        if (!lines[i]) continue;
+        const [lineValue, fileNumber] = lines[i].split(split);
+        const parsedLineValue = isNaN(Number(lineValue)) ? lineValue : Number(lineValue);
+
+        if (parsedLineValue === value) {
+            const fileNum = parseInt(fileNumber, 10);
+            if (!results.includes(fileNum)) {
+                results.push(fileNum);
+            }
+        } else {
+            break;
+        }
+    }
+
+    return results;
 }
 
 export async function removeFromIndex(
@@ -32,84 +107,47 @@ export async function removeFromIndex(
     keys: string[],
     one = false
 ) {
-    const files = query.context._dirIndex_files.map(file => parseInt(file.replace(".db", ""), 10));
+    if (!query.context._dirIndex_files) return;
 
-    const temp: Set<any>[] = Array.from({ length: files.length }).map(() => new Set());
-    const missingKeys = [];
+    const filesToRemove = new Set(query.context._dirIndex_files.map((file: string) => parseInt(file.replace(".db", ""), 10)));
 
     for (const key of keys) {
-        if (!(key in query.search)) {
-            missingKeys.push(key);
-            continue;
-        }
+        if (!(key in query.search)) continue;
+        const valueToRemove = query.search[key];
 
-        const indexPath = join(action.folder, query.collection, `${key}.json`);
-
+        const indexPath = join(action.folder, query.collection, `${key}.idx`);
         try {
             await access(indexPath);
         } catch {
             continue;
         }
 
-        const indexData: any[] =
-            JSON.parse(
-                await readFile(
-                    indexPath,
-                    "utf-8"
-                )
-            );
+        const content = await readFile(indexPath, "utf-8");
+        const lines = content.split("\n");
+        const newLines: string[] = [];
+        let removed = false;
 
-        for (let i = 0; i < files.length; i++) {
-            const fileNumber = files[i];
-            const data: any[] = indexData[fileNumber - 1];
+        for (const line of lines) {
+            if (!line) continue;
+            const [valStr, fileNumStr] = line.split(split);
+            const fileNum = parseInt(fileNumStr, 10);
 
-            if (one) {
-                const index = data.indexOf(query.search[key]);
-                if (index === -1)
+            const valMatches = (valStr == String(valueToRemove));
+            const fileMatches = filesToRemove.has(fileNum);
+
+            if (valMatches && fileMatches) {
+                if (one) {
+                    if (!removed) {
+                        removed = true;
+                        continue;
+                    }
+                } else {
                     continue;
-
-                data.splice(index, 1);
-                temp[i].add(index);
-
-                // Only first
-                break;
-            } else {
-                indexData[fileNumber - 1] = data.filter((d, idx) => {
-                    const res = d !== query.search[key];
-                    if (!res)
-                        temp[i].add(idx);
-                    return res;
-                });
+                }
             }
+            newLines.push(line);
         }
 
-        await writeFile(indexPath, JSON.stringify(indexData));
-    }
-
-    for (const key of missingKeys) {
-        const indexPath = join(action.folder, query.collection, `${key}.json`);
-        try {
-            await access(indexPath);
-        } catch {
-            continue;
-        }
-
-        const indexData: any[] =
-            JSON.parse(
-                await readFile(
-                    indexPath,
-                    "utf-8"
-                )
-            );
-
-        for (let i = 0; i < files.length; i++) {
-            const fileNumber = files[i] - 1;
-            const tempData = temp[i];
-            const data: any[] = indexData[fileNumber];
-
-            indexData[fileNumber] = data.filter((_, i) => !tempData.has(i));
-        }
-
-        await writeFile(indexPath, JSON.stringify(indexData));
+        await writeFile(indexPath, newLines.join("\n"));
     }
 }

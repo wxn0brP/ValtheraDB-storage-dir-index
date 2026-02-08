@@ -2,10 +2,8 @@ import { ValtheraClass } from "@wxn0brp/db-core";
 import { VQuery } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { FileActionsUtils } from "@wxn0brp/db-storage-dir/action.utils";
-import { access, readFile } from "fs/promises";
-import { join } from "path";
 import { IndexConfig } from "./types";
-import { removeFromIndex } from "./utils";
+import { findIndex, removeFromIndex } from "./utils";
 
 export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConfig) {
     const dbAction = db.dbAction as FileActions;
@@ -19,47 +17,35 @@ export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConf
         if (!collectionKeys)
             return files;
 
-        const fileIndices = files.map(file => parseInt(file.replace(".db", ""), 10));
-        const requiredFiles = new Map();
+        let candidateFiles: Set<number> | null = null;
 
         for (const key of collectionKeys) {
             if (!(key in query.search)) continue;
 
             const searchData = query.search[key];
-            if (!searchData) continue;
+            if (searchData === undefined) continue;
 
-            const indexPath = join(dbAction.folder, query.collection, `${key}.json`);
+            const foundIndices = await findIndex(dbAction, query.collection, key, searchData);
+            const foundSet = new Set(foundIndices);
 
-            try {
-                await access(indexPath);
-            } catch {
-                continue;
+            if (candidateFiles === null) {
+                candidateFiles = foundSet;
+            } else {
+                // Intersect
+                candidateFiles = new Set([...candidateFiles].filter(x => foundSet.has(x)));
             }
 
-            const indexData: any[] =
-                JSON.parse(
-                    await readFile(
-                        indexPath,
-                        "utf-8"
-                    )
-                );
+            if (candidateFiles.size === 0) break;
+        }
 
-            if (!indexData || !indexData.length) continue;
-
-            for (const index of fileIndices) {
-                if (requiredFiles.get(index) === false) continue;
-
-                const val = indexData[index - 1];
-                if (!val) continue;
-
-                requiredFiles.set(index, val.includes(searchData));
-            }
+        if (candidateFiles === null) {
+            return files;
         }
 
         const filteredFiles = files
             .filter(file => {
                 const index = parseInt(file.replace(".db", ""), 10);
-                return requiredFiles.get(index);
+                return candidateFiles!.has(index);
             });
 
         query.context._dirIndex_files = filteredFiles;
@@ -71,12 +57,12 @@ export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConf
 
     const proxy = new Proxy(dbAction, {
         get(target, prop, receiver) {
-            const value = target[prop];
+            const value = target[prop as keyof FileActions];
             const propString = prop.toString();
 
             if (propString.includes("remove")) {
                 return async (query: VQuery) => {
-                    const result = await value.bind(receiver)(query);
+                    const result = await (value as Function).bind(receiver)(query);
                     await removeFromIndex(
                         dbAction,
                         query,
