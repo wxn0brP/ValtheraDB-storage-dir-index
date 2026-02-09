@@ -2,12 +2,13 @@ import { ValtheraClass } from "@wxn0brp/db-core";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { FileActionsUtils } from "@wxn0brp/db-storage-dir/action.utils";
 import { addToIndex } from "./idx/add";
+import { createIndex } from "./idx/create";
 import { findIndex } from "./idx/find";
 import { removeFromIndexByData } from "./idx/remove";
-import { IndexConfig } from "./types";
+import { IndexConfig, ValtheraIndexDir } from "./types";
 import { getCollectionAndFileNum } from "./utils";
 
-export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConfig) {
+export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConfig): ValtheraIndexDir {
     const dbAction = db.dbAction as FileActions;
 
     const getSortedFilesOriginal: FileActionsUtils["getSortedFiles"] = dbAction.utils.getSortedFiles.bind(dbAction.utils);
@@ -101,6 +102,14 @@ export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConf
             }
 
             return value.bind(target);
+        }
+    });
+
+    return Object.assign(db, {
+        createIndex: async (collection: string) => {
+            const keys = indexConfig[collection];
+            if (!keys) return;
+            await createIndex(dbAction, collection, keys);
         }
     });
 }
