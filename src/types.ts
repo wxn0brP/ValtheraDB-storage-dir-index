@@ -6,4 +6,4 @@ export interface ValtheraIndexDirInterface {
     createIndex(collection: string): Promise<void>;
 }
 
-export type ValtheraIndexDir = ValtheraClass & ValtheraIndexDirInterface;
+export type ValtheraIndexDir<T = ValtheraClass> = T & ValtheraIndexDirInterface;

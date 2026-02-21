@@ -8,7 +8,7 @@ import { removeFromIndexByData } from "./idx/remove";
 import { IndexConfig, ValtheraIndexDir } from "./types";
 import { getCollectionAndFileNum } from "./utils";
 
-export function createIndexDirValthera(db: ValtheraClass, indexConfig: IndexConfig): ValtheraIndexDir {
+export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConfig: IndexConfig): ValtheraIndexDir<T> {
     const dbAction = db.dbAction as FileActions;
 
     const getSortedFilesOriginal: FileActionsUtils["getSortedFiles"] = dbAction.utils.getSortedFiles.bind(dbAction.utils);
