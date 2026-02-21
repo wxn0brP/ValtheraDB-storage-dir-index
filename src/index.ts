@@ -84,17 +84,9 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
                     if (!keys)
                         return await value.call(target, file, one, search, context);
 
-                    let matches: any[] = [];
-                    if (one) {
-                        const match = await target.findOne(file, search, context);
-                        if (match) matches = [match];
-                    } else {
-                        const results = await target.find(file, search, context);
-                        if (results) matches = results;
-                    }
-
                     const result = await value.call(target, file, one, search, context);
-                    if (result && matches.length > 0) {
+                    const matches = Array.isArray(result) ? result : result ? [result] : [];
+                    if (matches.length > 0) {
                         await removeFromIndexByData(dbAction, collection, matches, fileNum, keys);
                     }
                     return result;
