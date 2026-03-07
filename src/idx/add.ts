@@ -7,7 +7,7 @@ import { split } from "../vars";
 export async function addToIndex(
     action: FileActions,
     collection: string,
-    data: any,
+    data: Record<string, unknown>,
     file: number,
     keys: string[]
 ) {

@@ -29,3 +29,9 @@ export function compareValues(a: any, b: any): number {
     if (valA > valB) return 1;
     return 0;
 }
+
+export function convertResultToArray(result: unknown[] | unknown | null) {
+    if (result === null) return [];
+    if (Array.isArray(result)) return result;
+    return [result];
+}

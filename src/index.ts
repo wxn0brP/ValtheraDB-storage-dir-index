@@ -1,12 +1,13 @@
-import { ValtheraClass } from "@wxn0brp/db-core";
+import { convertIdToUnix, ValtheraClass } from "@wxn0brp/db-core";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { FileActionsUtils } from "@wxn0brp/db-storage-dir/action.utils";
 import { addToIndex } from "./idx/add";
 import { createIndex } from "./idx/create";
 import { findIndex } from "./idx/find";
 import { removeFromIndexByData } from "./idx/remove";
+import { updateIndex } from "./idx/update";
 import { IndexConfig, ValtheraIndexDir } from "./types";
-import { getCollectionAndFileNum } from "./utils";
+import { convertResultToArray, getCollectionAndFileNum } from "./utils";
 
 export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConfig: IndexConfig): ValtheraIndexDir<T> {
     const dbAction = db.dbAction as FileActions;
@@ -85,10 +86,37 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
                         return await value.call(target, file, one, search, context);
 
                     const result = await value.call(target, file, one, search, context);
-                    const matches = Array.isArray(result) ? result : result ? [result] : [];
+                    const matches = convertResultToArray(result);
+
                     if (matches.length > 0) {
                         await removeFromIndexByData(dbAction, collection, matches, fileNum, keys);
                     }
+                    return result;
+                };
+            }
+
+            if (prop === "update") {
+                return async (file: string, one: boolean, search: any, update: any, context: any) => {
+                    const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
+                    const keys = indexConfig[collection];
+
+                    if (!keys)
+                        return await value.call(target, file, search, update, context);
+
+                    const findResults = await target.find(file, search, context);
+                    if (!findResults || findResults.length === 0) return one ? null : [];
+
+                    const result = await value.call(target, file, one, search, update, context);
+
+                    await updateIndex(
+                        dbAction,
+                        collection,
+                        findResults,
+                        convertResultToArray(result),
+                        fileNum,
+                        keys
+                    );
+
                     return result;
                 };
             }

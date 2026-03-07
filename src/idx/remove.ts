@@ -7,7 +7,7 @@ import { split } from "../vars";
 export async function removeFromIndexByData(
     action: FileActions,
     collection: string,
-    docs: any[],
+    docs: Record<string, unknown>[],
     file: number,
     keys: string[]
 ) {
