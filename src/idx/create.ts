@@ -12,7 +12,18 @@ export async function createIndex(action: FileActions, collection: string, keys:
 
         for (const file of files) {
             const fileNumber = parseInt(file.replace(".db", ""), 10);
-            const data = await action.fileCpu.find(join(action.folder, collection, file), {});
+            const data = await action.fileCpu.find(
+                join(action.folder, collection, file),
+                {
+                    collection,
+                    search: {},
+                    context: {},
+                    control: {},
+                    dbFindOpts: {},
+                    findOpts: {},
+                }
+            );
+
             if (!data) continue;
 
             for (const doc of data) {

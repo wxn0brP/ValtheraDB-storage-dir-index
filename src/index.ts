@@ -1,4 +1,5 @@
-import { convertIdToUnix, ValtheraClass } from "@wxn0brp/db-core";
+import { ValtheraClass } from "@wxn0brp/db-core";
+import { AddQuery, RemoveQuery, UpdateQuery } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { FileActionsUtils } from "@wxn0brp/db-storage-dir/action.utils";
 import { addToIndex } from "./idx/add";
@@ -52,7 +53,7 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
                 return candidateFiles!.has(index);
             });
 
-        query.context!._dirIndex_files = filteredFiles;
+        query.control._dirIndex_files = filteredFiles;
 
         return filteredFiles;
     }
@@ -66,47 +67,47 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
             if (typeof value !== "function") return value;
 
             if (prop === "add") {
-                return async (file: string, data: any) => {
-                    const result = await value.call(target, file, data);
+                return async (file: string, config: AddQuery) => {
+                    const result = await value.call(target, file, config);
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
-                    if (keys) {
-                        await addToIndex(dbAction, collection, data, fileNum, keys);
-                    }
+                    if (keys)
+                        await addToIndex(dbAction, collection, config.data, fileNum, keys);
+
                     return result;
                 };
             }
 
             if (prop === "remove") {
-                return async (file: string, one: boolean, search: any, context: any) => {
+                return async (file: string, config: RemoveQuery, one: boolean) => {
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
 
                     if (!keys)
-                        return await value.call(target, file, one, search, context);
+                        return await value.call(target, file, config, one);
 
-                    const result = await value.call(target, file, one, search, context);
+                    const result = await value.call(target, file, config, one);
                     const matches = convertResultToArray(result);
 
-                    if (matches.length > 0) {
+                    if (matches.length > 0)
                         await removeFromIndexByData(dbAction, collection, matches, fileNum, keys);
-                    }
+
                     return result;
                 };
             }
 
             if (prop === "update") {
-                return async (file: string, one: boolean, search: any, update: any, context: any) => {
+                return async (file: string, config: UpdateQuery, one: boolean) => {
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
 
                     if (!keys)
-                        return await value.call(target, file, search, update, context);
+                        return await value.call(target, file, config, one);
 
-                    const findResults = await target.find(file, search, context);
+                    const findResults = await target.find(file, config);
                     if (!findResults || findResults.length === 0) return one ? null : [];
 
-                    const result = await value.call(target, file, one, search, update, context);
+                    const result = await value.call(target, file, config, one);
 
                     await updateIndex(
                         dbAction,

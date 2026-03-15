@@ -7,3 +7,9 @@ export interface ValtheraIndexDirInterface {
 }
 
 export type ValtheraIndexDir<T = ValtheraClass> = T & ValtheraIndexDirInterface;
+
+declare module "@wxn0brp/db-core/types/query" {
+    export interface VQuery_Control {
+        _dirIndex_files?: string[];
+    }
+}
