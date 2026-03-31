@@ -27,7 +27,7 @@
         "@wxn0brp/db-core": "^0.10.0-alpha.1",
         "@wxn0brp/db-storage-dir": "^0.100.0-alpha.0",
         "tsc-alias": "*",
-        "typescript": "*"
+        "typescript": "^6.0.0"
     },
     "files": [
         "dist"
