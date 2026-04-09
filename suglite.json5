@@ -1,10 +1,6 @@
 {
-	cmd: "yarn build && yarn start",
+	cmd: "tsc --noEmit && bun run src/test.ts",
 	watch: [
 		"src"
-	],
-	restart_cmd: "clear",
-	events: {
-		rs: "clear"
-	}
+	]
 }

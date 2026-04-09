@@ -1,5 +1,5 @@
 import { ValtheraClass } from "@wxn0brp/db-core";
-import { AddQuery, RemoveQuery, UpdateQuery } from "@wxn0brp/db-core/types/query";
+import type { VQueryT } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { FileActionsUtils } from "@wxn0brp/db-storage-dir/action.utils";
 import { addToIndex } from "./idx/add";
@@ -67,7 +67,7 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
             if (typeof value !== "function") return value;
 
             if (prop === "add") {
-                return async (file: string, config: AddQuery) => {
+                return async (file: string, config: VQueryT.Add) => {
                     const result = await value.call(target, file, config);
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
@@ -79,7 +79,7 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
             }
 
             if (prop === "remove") {
-                return async (file: string, config: RemoveQuery, one: boolean) => {
+                return async (file: string, config: VQueryT.Remove, one: boolean) => {
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
 
@@ -97,7 +97,7 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
             }
 
             if (prop === "update") {
-                return async (file: string, config: UpdateQuery, one: boolean) => {
+                return async (file: string, config: VQueryT.Update, one: boolean) => {
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
 

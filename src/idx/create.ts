@@ -1,3 +1,4 @@
+import type { VQueryT } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { writeFile } from "fs/promises";
 import { join } from "path";
@@ -12,17 +13,16 @@ export async function createIndex(action: FileActions, collection: string, keys:
 
         for (const file of files) {
             const fileNumber = parseInt(file.replace(".db", ""), 10);
-            const data = await action.fileCpu.find(
-                join(action.folder, collection, file),
-                {
-                    collection,
-                    search: {},
-                    context: {},
-                    control: {},
-                    dbFindOpts: {},
-                    findOpts: {},
-                }
-            );
+            const query: VQueryT.Find = {
+                collection,
+                search: {},
+                context: {},
+                control: {},
+                dbFindOpts: {},
+                findOpts: {},
+            }
+            action._ensureQueryFormat(query);
+            const data = await action.fileCpu.find(join(action.folder, collection, file), query);
 
             if (!data) continue;
 
