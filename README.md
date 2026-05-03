@@ -5,7 +5,7 @@ This package adds an indexing mechanism to ValtheraDB's directory storage. By ma
 ## Installation
 
 ```bash
-bun add @wxn0brp/db-storage-dir-index @wxn0brp/db-core @wxn0brp/db-storage-dir
+bun add @wxn0brp/db-storage-dir-index @wxn0brp/db
 ```
 
 ## Usage
