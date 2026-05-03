@@ -16,14 +16,14 @@
         "build": "tsc && tsc-alias"
     },
     "peerDependencies": {
-        "@wxn0brp/db-core": "^0.10.2",
-        "@wxn0brp/db-storage-dir": "^0.101.0-alpha.1"
+        "@wxn0brp/db-core": "^0.10.4",
+        "@wxn0brp/db-storage-dir": "^0.101.1"
     },
     "devDependencies": {
         "@types/bun": "*",
-        "@wxn0brp/db": "^0.100.2-alpha.1",
-        "@wxn0brp/db-core": "^0.10.2",
-        "@wxn0brp/db-storage-dir": "^0.101.0-alpha.1",
+        "@wxn0brp/db": "^0.100.2",
+        "@wxn0brp/db-core": "^0.10.4",
+        "@wxn0brp/db-storage-dir": "^0.101.1",
         "tsc-alias": "^1",
         "typescript": "^6"
     },
