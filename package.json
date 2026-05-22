@@ -23,7 +23,7 @@
         "@types/bun": "*",
         "@wxn0brp/db": "^0.100.2",
         "@wxn0brp/db-core": "^0.10.4",
-        "@wxn0brp/db-storage-dir": "^0.101.1",
+        "@wxn0brp/db-storage-dir": "^0.110.0",
         "tsc-alias": "^1",
         "typescript": "^6"
     },
