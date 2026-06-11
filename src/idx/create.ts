@@ -22,7 +22,7 @@ export async function createIndex(action: FileActions, collection: string, keys:
                 findOpts: {},
             }
             action._ensureQueryFormat(query);
-            const data = await action.fileCpu.find(join(action.folder, collection, file), query);
+            const data = await action.fileCpu.find(join(action.folder, collection, file), query, action.fileCpuOpts);
 
             if (!data) continue;
 

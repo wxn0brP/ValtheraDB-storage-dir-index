@@ -67,8 +67,8 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
             if (typeof value !== "function") return value;
 
             if (prop === "add") {
-                return async (file: string, config: VQueryT.Add) => {
-                    const result = await value.call(target, file, config);
+                return async (file: string, config: VQueryT.Add, opts: any) => {
+                    const result = await value.call(target, file, config, opts);
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
                     if (keys)
@@ -79,14 +79,14 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
             }
 
             if (prop === "remove") {
-                return async (file: string, config: VQueryT.Remove, one: boolean) => {
+                return async (file: string, config: VQueryT.Remove, one: boolean, opts: any) => {
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
 
-                    if (!keys)
-                        return await value.call(target, file, config, one);
+                    const result = await value.call(target, file, config, one, opts);
 
-                    const result = await value.call(target, file, config, one);
+                    if (!keys) return result;
+
                     const matches = convertResultToArray(result);
 
                     if (matches.length > 0)
@@ -97,17 +97,17 @@ export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConf
             }
 
             if (prop === "update") {
-                return async (file: string, config: VQueryT.Update, one: boolean) => {
+                return async (file: string, config: VQueryT.Update, one: boolean, opts: any) => {
                     const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
                     const keys = indexConfig[collection];
 
                     if (!keys)
-                        return await value.call(target, file, config, one);
+                        return await value.call(target, file, config, one, opts);
 
-                    const findResults = await target.find(file, config);
+                    const findResults = await target.find(file, config, opts);
                     if (!findResults || findResults.length === 0) return one ? null : [];
 
-                    const result = await value.call(target, file, config, one);
+                    const result = await value.call(target, file, config, one, opts);
 
                     await updateIndex(
                         dbAction,
