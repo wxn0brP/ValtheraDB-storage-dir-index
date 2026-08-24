@@ -1,37 +1,42 @@
 import { resolve, sep } from "path";
 
 export function getCollectionAndFileNum(filePath: string, folder: string) {
-    const absFile = resolve(filePath);
-    const absFolder = resolve(folder);
-    const relative = absFile.replace(absFolder, "");
-    const parts = relative.split(sep).filter(Boolean);
-    const fileName = parts.pop()!;
-    const fileNum = parseInt(fileName.replace(".db", ""), 10);
-    const collection = parts.join("/");
-    return { collection, fileNum };
+	const absFile = resolve(filePath);
+	const absFolder = resolve(folder);
+	const relative = absFile.replace(absFolder, "");
+	const parts = relative.split(sep).filter(Boolean);
+	const fileName = parts.pop()!;
+	const fileNum = parseInt(fileName.replace(".db", ""), 10);
+	const collection = parts.join("/");
+	return {
+		collection,
+		fileNum,
+	};
 }
 
 export function compareValues(a: any, b: any): number {
-    let valA = a;
-    let valB = b;
+	let valA = a;
+	const valB = b;
 
-    if (typeof valB === "number") {
-        const numA = Number(valA);
-        if (!isNaN(numA)) valA = numA;
-    } else if (typeof valB === "string") {
-        valA = String(valA);
-    }
+	if (typeof valB === "number") {
+		const numA = Number(valA);
+		if (!Number.isNaN(numA)) valA = numA;
+	} else if (typeof valB === "string") {
+		valA = String(valA);
+	}
 
-    if (typeof valA === "string" && typeof valB === "string") {
-        return valA.localeCompare(valB);
-    }
-    if (valA < valB) return -1;
-    if (valA > valB) return 1;
-    return 0;
+	if (typeof valA === "string" && typeof valB === "string") {
+		return valA.localeCompare(valB);
+	}
+	if (valA < valB) return -1;
+	if (valA > valB) return 1;
+	return 0;
 }
 
 export function convertResultToArray(result: unknown[] | unknown | null) {
-    if (result === null) return [];
-    if (Array.isArray(result)) return result;
-    return [result];
+	if (result === null) return [];
+	if (Array.isArray(result)) return result;
+	return [
+		result,
+	];
 }

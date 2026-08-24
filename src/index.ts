@@ -10,127 +10,166 @@ import { updateIndex } from "./idx/update";
 import { IndexConfig, ValtheraIndexDir } from "./types";
 import { convertResultToArray, getCollectionAndFileNum } from "./utils";
 
-export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConfig: IndexConfig): ValtheraIndexDir<T> {
-    const dbAction = db.adapter as FileActions;
+export function createIndexDirValthera<T extends ValtheraClass>(
+	db: T,
+	indexConfig: IndexConfig,
+): ValtheraIndexDir<T> {
+	const dbAction = db.adapter as FileActions;
 
-    const getSortedFilesOriginal: FileActionsUtils["getSortedFiles"] = dbAction.utils.getSortedFiles.bind(dbAction.utils);
+	const getSortedFilesOriginal: FileActionsUtils["getSortedFiles"] =
+		dbAction.utils.getSortedFiles.bind(dbAction.utils);
 
-    const getSortedFiles: FileActionsUtils["getSortedFiles"] = async (folder, query) => {
-        const files = await getSortedFilesOriginal(folder, query);
-        const collectionKeys = indexConfig[query.collection!];
+	const getSortedFiles: FileActionsUtils["getSortedFiles"] = async (
+		folder,
+		query,
+	) => {
+		const files = await getSortedFilesOriginal(folder, query);
+		const collectionKeys = indexConfig[query.collection!];
 
-        if (!collectionKeys || !query.search || typeof query.search !== "object")
-            return files;
+		if (!collectionKeys || !query.search || typeof query.search !== "object")
+			return files;
 
-        let candidateFiles: Set<number> | null = null;
+		let candidateFiles: Set<number> | null = null;
 
-        for (const key of collectionKeys) {
-            if (!(key in query.search)) continue;
+		for (const key of collectionKeys) {
+			if (!(key in query.search)) continue;
 
-            const searchData = (query.search as any)[key];
-            if (searchData === undefined) continue;
+			const searchData = (query.search as any)[key];
+			if (searchData === undefined) continue;
 
-            const foundIndices = await findIndex(dbAction, query.collection!, key, searchData);
-            const foundSet = new Set(foundIndices);
+			const foundIndices = await findIndex(
+				dbAction,
+				query.collection!,
+				key,
+				searchData,
+			);
+			const foundSet = new Set(foundIndices);
 
-            if (candidateFiles === null) {
-                candidateFiles = foundSet;
-            } else {
-                // Intersect
-                candidateFiles = new Set([...candidateFiles].filter(x => foundSet.has(x)));
-            }
+			if (candidateFiles === null) {
+				candidateFiles = foundSet;
+			} else {
+				// Intersect
+				candidateFiles = new Set(
+					[
+						...candidateFiles,
+					].filter(x => foundSet.has(x)),
+				);
+			}
 
-            if (candidateFiles.size === 0) break;
-        }
+			if (candidateFiles.size === 0) break;
+		}
 
-        if (candidateFiles === null) {
-            return files;
-        }
+		if (candidateFiles === null) {
+			return files;
+		}
 
-        const filteredFiles = files
-            .filter(file => {
-                const index = parseInt(file.replace(".db", ""), 10);
-                return candidateFiles!.has(index);
-            });
+		const filteredFiles = files.filter(file => {
+			const index = parseInt(file.replace(".db", ""), 10);
+			return candidateFiles!.has(index);
+		});
 
-        query.control._dirIndex_files = filteredFiles;
+		query.control._dirIndex_files = filteredFiles;
 
-        return filteredFiles;
-    }
+		return filteredFiles;
+	};
 
-    dbAction.utils.getSortedFiles = getSortedFiles.bind(dbAction.utils);
+	dbAction.utils.getSortedFiles = getSortedFiles.bind(dbAction.utils);
 
-    const originalFileCpu = dbAction.fileCpu;
-    dbAction.fileCpu = new Proxy(originalFileCpu, {
-        get(target, prop, receiver) {
-            const value = Reflect.get(target, prop, receiver);
-            if (typeof value !== "function") return value;
+	const originalFileCpu = dbAction.fileCpu;
+	dbAction.fileCpu = new Proxy(originalFileCpu, {
+		get(target, prop, receiver) {
+			const value = Reflect.get(target, prop, receiver);
+			if (typeof value !== "function") return value;
 
-            if (prop === "add") {
-                return async (file: string, config: VQueryT.Add, opts: any) => {
-                    const result = await value.call(target, file, config, opts);
-                    const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
-                    const keys = indexConfig[collection];
-                    if (keys)
-                        await addToIndex(dbAction, collection, config.data, fileNum, keys);
+			if (prop === "add") {
+				return async (file: string, config: VQueryT.Add, opts: any) => {
+					const result = await value.call(target, file, config, opts);
+					const { collection, fileNum } = getCollectionAndFileNum(
+						file,
+						dbAction.folder,
+					);
+					const keys = indexConfig[collection];
+					if (keys)
+						await addToIndex(dbAction, collection, config.data, fileNum, keys);
 
-                    return result;
-                };
-            }
+					return result;
+				};
+			}
 
-            if (prop === "remove") {
-                return async (file: string, config: VQueryT.Remove, one: boolean, opts: any) => {
-                    const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
-                    const keys = indexConfig[collection];
+			if (prop === "remove") {
+				return async (
+					file: string,
+					config: VQueryT.Remove,
+					one: boolean,
+					opts: any,
+				) => {
+					const { collection, fileNum } = getCollectionAndFileNum(
+						file,
+						dbAction.folder,
+					);
+					const keys = indexConfig[collection];
 
-                    const result = await value.call(target, file, config, one, opts);
+					const result = await value.call(target, file, config, one, opts);
 
-                    if (!keys) return result;
+					if (!keys) return result;
 
-                    const matches = convertResultToArray(result);
+					const matches = convertResultToArray(result);
 
-                    if (matches.length > 0)
-                        await removeFromIndexByData(dbAction, collection, matches, fileNum, keys);
+					if (matches.length > 0)
+						await removeFromIndexByData(
+							dbAction,
+							collection,
+							matches,
+							fileNum,
+							keys,
+						);
 
-                    return result;
-                };
-            }
+					return result;
+				};
+			}
 
-            if (prop === "update") {
-                return async (file: string, config: VQueryT.Update, one: boolean, opts: any) => {
-                    const { collection, fileNum } = getCollectionAndFileNum(file, dbAction.folder);
-                    const keys = indexConfig[collection];
+			if (prop === "update") {
+				return async (
+					file: string,
+					config: VQueryT.Update,
+					one: boolean,
+					opts: any,
+				) => {
+					const { collection, fileNum } = getCollectionAndFileNum(
+						file,
+						dbAction.folder,
+					);
+					const keys = indexConfig[collection];
 
-                    if (!keys)
-                        return await value.call(target, file, config, one, opts);
+					if (!keys) return await value.call(target, file, config, one, opts);
 
-                    const findResults = await target.find(file, config, opts);
-                    if (!findResults || findResults.length === 0) return one ? null : [];
+					const findResults = await target.find(file, config, opts);
+					if (!findResults || findResults.length === 0) return one ? null : [];
 
-                    const result = await value.call(target, file, config, one, opts);
+					const result = await value.call(target, file, config, one, opts);
 
-                    await updateIndex(
-                        dbAction,
-                        collection,
-                        findResults,
-                        convertResultToArray(result),
-                        fileNum,
-                        keys
-                    );
+					await updateIndex(
+						dbAction,
+						collection,
+						findResults,
+						convertResultToArray(result),
+						fileNum,
+						keys,
+					);
 
-                    return result;
-                };
-            }
+					return result;
+				};
+			}
 
-            return value.bind(target);
-        }
-    });
+			return value.bind(target);
+		},
+	});
 
-    return Object.assign(db, {
-        createIndex: async (collection: string) => {
-            const keys = indexConfig[collection];
-            if (!keys) return;
-            await createIndex(dbAction, collection, keys);
-        }
-    });
+	return Object.assign(db, {
+		createIndex: async (collection: string) => {
+			const keys = indexConfig[collection];
+			if (!keys) return;
+			await createIndex(dbAction, collection, keys);
+		},
+	});
 }
