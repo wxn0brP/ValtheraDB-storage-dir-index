@@ -1,6 +1,6 @@
 import type { VQueryT } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
-import { writeFile } from "fs/promises";
+import { access, writeFile } from "fs/promises";
 import { join } from "path";
 import { compareValues } from "../utils";
 import { split } from "../vars";
@@ -10,10 +10,15 @@ export async function createIndex(
 	collection: string,
 	keys: string[],
 ) {
-	const files = await action.utils.getSortedFiles(
-		join(action.folder, collection),
-		{},
-	);
+	const collectionPath = join(action.folder, collection);
+	try {
+		await access(collectionPath);
+	} catch {
+		// collection does not exist yet -> nothing to index
+		return;
+	}
+
+	const files = await action.utils.getSortedFiles(collectionPath, {});
 
 	for (const key of keys) {
 		const indexEntries: {
