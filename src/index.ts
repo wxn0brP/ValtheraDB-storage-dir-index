@@ -11,7 +11,7 @@ import { IndexConfig, ValtheraIndexDir } from "./types";
 import { convertResultToArray, getCollectionAndFileNum } from "./utils";
 
 export function createIndexDirValthera<T extends ValtheraClass>(db: T, indexConfig: IndexConfig): ValtheraIndexDir<T> {
-    const dbAction = db.dbAction as FileActions;
+    const dbAction = db.adapter as FileActions;
 
     const getSortedFilesOriginal: FileActionsUtils["getSortedFiles"] = dbAction.utils.getSortedFiles.bind(dbAction.utils);
 
