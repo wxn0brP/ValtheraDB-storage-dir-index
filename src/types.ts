@@ -1,12 +1,14 @@
-import { ValtheraClass } from "@wxn0brp/db-core";
+import { DbDirOpts } from "@wxn0brp/db-storage-dir/types";
 
 export type IndexConfig = Record<string, string[]>;
+
+export interface DirIndexOpts extends DbDirOpts {
+	maxFileSize?: number;
+}
 
 export interface ValtheraIndexDirInterface {
 	createIndex(collection: string): Promise<void>;
 }
-
-export type ValtheraIndexDir<T = ValtheraClass> = T & ValtheraIndexDirInterface;
 
 declare module "@wxn0brp/db-core/types/query" {
 	export interface VQuery_Control {
