@@ -23,6 +23,10 @@ export async function findLeaf(pm: PageManager, value: any): Promise<NodeRef> {
 		node = await pm.readPage(pageId);
 	}
 
+	if (node.type !== PageType.Leaf) {
+		throw new Error(`findLeaf: expected leaf node at page ${pageId}, got type ${node.type}`);
+	}
+
 	return {
 		pageId,
 		node,
