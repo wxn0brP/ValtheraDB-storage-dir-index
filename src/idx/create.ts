@@ -1,9 +1,10 @@
 import type { VQueryT } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
-import { access, writeFile } from "fs/promises";
+import { access, unlink } from "fs/promises";
 import { join } from "path";
-import { compareValues } from "../utils";
-import { split } from "../vars";
+import { BTree } from "./btree";
+import { create } from "./page/utils";
+import { compareSafe } from "@wxn0brp/db-core/utils/compare";
 
 export async function createIndex(
 	action: FileActions,
@@ -14,7 +15,6 @@ export async function createIndex(
 	try {
 		await access(collectionPath);
 	} catch {
-		// collection does not exist yet -> nothing to index
 		return;
 	}
 
@@ -56,17 +56,19 @@ export async function createIndex(
 		}
 
 		indexEntries.sort((a, b) => {
-			const cmp = compareValues(a.value, b.value);
+			const cmp = compareSafe(a.value, b.value);
 			if (cmp !== 0) return cmp;
 			return a.file - b.file;
 		});
 
-		const indexContent = indexEntries
-			.map(entry => `${entry.value}${split}${entry.file}`)
-			.join("\n");
-		await writeFile(
-			join(action.folder, collection, `${key}.idx`),
-			indexContent,
-		);
+		const indexPath = join(action.folder, collection, `${key}.idx`);
+		try {
+			await unlink(indexPath);
+		} catch {}
+
+		const pm = await create(indexPath);
+		const tree = new BTree(pm);
+		await tree.bulkLoad(indexEntries);
+		await tree.close();
 	}
 }

@@ -1,13 +1,20 @@
 import type { VQueryT } from "@wxn0brp/db-core/types/query";
 import { FileActions } from "@wxn0brp/db-storage-dir";
 import { FileActionsUtils } from "@wxn0brp/db-storage-dir/action.utils";
-import { addToIndex } from "./idx/add";
+import { access } from "fs/promises";
+import { join } from "path";
 import { createIndex } from "./idx/create";
-import { findIndex } from "./idx/find";
-import { removeFromIndexByData } from "./idx/remove";
-import { updateIndex } from "./idx/update";
+import {
+	addToIndex,
+	findIndex,
+	removeFromIndexByData,
+	updateIndex,
+} from "./idx/operations";
+import { PageManager } from "./idx/page";
+import { create } from "./idx/page/utils";
 import type { IndexConfig } from "./types";
 import { convertResultToArray, getCollectionAndFileNum } from "./utils";
+import { AnotherCache } from "@wxn0brp/ac";
 
 export interface IndexDirActions extends FileActions {
 	createIndex(collection: string): Promise<void>;
@@ -20,17 +27,49 @@ export function createIndexDirAdapter(
 	const getSortedFilesOriginal: FileActionsUtils["getSortedFiles"] =
 		action.utils.getSortedFiles.bind(action.utils);
 
+	const pmCaches = new Map<string, Map<string, PageManager>>();
+	const indexExistsCache = new AnotherCache<boolean>();
+
+	const getPM = async (
+		collection: string,
+		key: string,
+	): Promise<PageManager> => {
+		let colMap = pmCaches.get(collection);
+		if (!colMap) {
+			colMap = new Map();
+			pmCaches.set(collection, colMap);
+		}
+		let pm = colMap.get(key);
+		if (!pm) {
+			const indexPath = join(action.folder, collection, `${key}.idx`);
+			pm = await create(indexPath);
+			colMap.set(key, pm);
+		}
+		return pm;
+	};
+
+	const getPMs = async (
+		collection: string,
+		keys: string[],
+	): Promise<Map<string, PageManager>> => {
+		const result = new Map<string, PageManager>();
+		for (const key of keys) {
+			result.set(key, await getPM(collection, key));
+		}
+		return result;
+	};
+
 	const getSortedFiles: FileActionsUtils["getSortedFiles"] = async (
 		folder,
 		query,
 	) => {
 		const files = await getSortedFilesOriginal(folder, query);
-		const collectionKeys = indexConfig[query.collection!];
+		const collectionKeys = indexConfig[query.collection];
 
 		if (!collectionKeys || !query.search || typeof query.search !== "object")
 			return files;
 
-		let candidateFiles: Set<number> | null = null;
+		let candidateFiles: Set<number> = null;
 
 		for (const key of collectionKeys) {
 			if (!(key in query.search)) continue;
@@ -38,18 +77,27 @@ export function createIndexDirAdapter(
 			const searchData = (query.search as any)[key];
 			if (searchData === undefined) continue;
 
-			const foundIndices = await findIndex(
-				action,
-				query.collection!,
-				key,
-				searchData,
-			);
+			const cacheKey = `${query.collection}:${key}`;
+			if (!indexExistsCache.has(cacheKey)) {
+				const indexPath = join(action.folder, query.collection, `${key}.idx`);
+				try {
+					await access(indexPath);
+					indexExistsCache.set(cacheKey, true);
+				} catch {
+					indexExistsCache.set(cacheKey, false);
+					continue;
+				}
+			} else {
+				if (!indexExistsCache.get(cacheKey)) continue;
+			}
+
+			const pm = await getPM(query.collection, key);
+			const foundIndices = await findIndex(searchData, pm);
 			const foundSet = new Set(foundIndices);
 
 			if (candidateFiles === null) {
 				candidateFiles = foundSet;
 			} else {
-				// Intersect
 				candidateFiles = new Set(
 					[
 						...candidateFiles,
@@ -90,8 +138,10 @@ export function createIndexDirAdapter(
 						action.folder,
 					);
 					const keys = indexConfig[collection];
-					if (keys)
-						await addToIndex(action, collection, config.data, fileNum, keys);
+					if (keys) {
+						const pms = await getPMs(collection, keys);
+						await addToIndex(config.data, fileNum, keys, pms);
+					}
 
 					return result;
 				};
@@ -116,14 +166,10 @@ export function createIndexDirAdapter(
 
 					const matches = convertResultToArray(result);
 
-					if (matches.length > 0)
-						await removeFromIndexByData(
-							action,
-							collection,
-							matches,
-							fileNum,
-							keys,
-						);
+					if (matches.length > 0) {
+						const pms = await getPMs(collection, keys);
+						await removeFromIndexByData(matches, fileNum, keys, pms);
+					}
 
 					return result;
 				};
@@ -149,13 +195,13 @@ export function createIndexDirAdapter(
 
 					const result = await value.call(target, file, config, one, opts);
 
+					const pms = await getPMs(collection, keys);
 					await updateIndex(
-						action,
-						collection,
 						findResults,
 						convertResultToArray(result),
 						fileNum,
 						keys,
+						pms,
 					);
 
 					return result;
@@ -170,7 +216,20 @@ export function createIndexDirAdapter(
 	indexDirAction.createIndex = async (collection: string) => {
 		const keys = indexConfig[collection];
 		if (!keys) return;
+
+		const colMap = pmCaches.get(collection);
+		if (colMap) {
+			for (const pm of colMap.values()) {
+				await pm.close();
+			}
+			colMap.clear();
+		}
+
 		await createIndex(action, collection, keys);
+
+		for (const key of keys) {
+			indexExistsCache.set(`${collection}:${key}`, true);
+		}
 	};
 
 	return indexDirAction;

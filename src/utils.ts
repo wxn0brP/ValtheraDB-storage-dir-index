@@ -14,25 +14,6 @@ export function getCollectionAndFileNum(filePath: string, folder: string) {
 	};
 }
 
-export function compareValues(a: any, b: any): number {
-	let valA = a;
-	const valB = b;
-
-	if (typeof valB === "number") {
-		const numA = Number(valA);
-		if (!Number.isNaN(numA)) valA = numA;
-	} else if (typeof valB === "string") {
-		valA = String(valA);
-	}
-
-	if (typeof valA === "string" && typeof valB === "string") {
-		return valA.localeCompare(valB);
-	}
-	if (valA < valB) return -1;
-	if (valA > valB) return 1;
-	return 0;
-}
-
 export function convertResultToArray(result: unknown[] | unknown | null) {
 	if (result === null) return [];
 	if (Array.isArray(result)) return result;
