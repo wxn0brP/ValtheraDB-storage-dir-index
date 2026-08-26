@@ -1,0 +1,155 @@
+import { access } from "fs/promises";
+import { join } from "path";
+import { createIndex } from "./idx/create.js";
+import { addToIndex, findIndex, removeFromIndexByData, updateIndex, } from "./idx/operations.js";
+import { create } from "./idx/page/utils.js";
+import { convertResultToArray, getCollectionAndFileNum } from "./utils.js";
+import { AnotherCache } from "@wxn0brp/ac";
+export function createIndexDirAdapter(action, indexConfig) {
+    const getSortedFilesOriginal = action.utils.getSortedFiles.bind(action.utils);
+    const pmCaches = new Map();
+    const indexExistsCache = new AnotherCache();
+    const getPM = async (collection, key) => {
+        let colMap = pmCaches.get(collection);
+        if (!colMap) {
+            colMap = new Map();
+            pmCaches.set(collection, colMap);
+        }
+        let pm = colMap.get(key);
+        if (!pm) {
+            const indexPath = join(action.folder, collection, `${key}.idx`);
+            pm = await create(indexPath);
+            colMap.set(key, pm);
+        }
+        return pm;
+    };
+    const getPMs = async (collection, keys) => {
+        const result = new Map();
+        for (const key of keys) {
+            result.set(key, await getPM(collection, key));
+        }
+        return result;
+    };
+    const getSortedFiles = async (folder, query) => {
+        const files = await getSortedFilesOriginal(folder, query);
+        const collectionKeys = indexConfig[query.collection];
+        if (!collectionKeys || !query.search || typeof query.search !== "object")
+            return files;
+        let candidateFiles = null;
+        for (const key of collectionKeys) {
+            if (!(key in query.search))
+                continue;
+            const searchData = query.search[key];
+            if (searchData === undefined)
+                continue;
+            const cacheKey = `${query.collection}:${key}`;
+            if (!indexExistsCache.has(cacheKey)) {
+                const indexPath = join(action.folder, query.collection, `${key}.idx`);
+                try {
+                    await access(indexPath);
+                    indexExistsCache.set(cacheKey, true);
+                }
+                catch {
+                    indexExistsCache.set(cacheKey, false);
+                    continue;
+                }
+            }
+            else {
+                if (!indexExistsCache.get(cacheKey))
+                    continue;
+            }
+            const pm = await getPM(query.collection, key);
+            const foundIndices = await findIndex(searchData, pm);
+            const foundSet = new Set(foundIndices);
+            if (candidateFiles === null) {
+                candidateFiles = foundSet;
+            }
+            else {
+                candidateFiles = new Set([
+                    ...candidateFiles,
+                ].filter(x => foundSet.has(x)));
+            }
+            if (candidateFiles.size === 0)
+                break;
+        }
+        if (candidateFiles === null) {
+            return files;
+        }
+        const filteredFiles = files.filter(file => {
+            const index = parseInt(file.replace(".db", ""), 10);
+            return candidateFiles.has(index);
+        });
+        query.control._dirIndex_files = filteredFiles;
+        return filteredFiles;
+    };
+    action.utils.getSortedFiles = getSortedFiles.bind(action.utils);
+    const originalFileCpu = action.fileCpu;
+    action.fileCpu = new Proxy(originalFileCpu, {
+        get(target, prop, receiver) {
+            const value = Reflect.get(target, prop, receiver);
+            if (typeof value !== "function")
+                return value;
+            if (prop === "add") {
+                return async (file, config, opts) => {
+                    const result = await value.call(target, file, config, opts);
+                    const { collection, fileNum } = getCollectionAndFileNum(file, action.folder);
+                    const keys = indexConfig[collection];
+                    if (keys) {
+                        const pms = await getPMs(collection, keys);
+                        await addToIndex(config.data, fileNum, keys, pms);
+                    }
+                    return result;
+                };
+            }
+            if (prop === "remove") {
+                return async (file, config, one, opts) => {
+                    const { collection, fileNum } = getCollectionAndFileNum(file, action.folder);
+                    const keys = indexConfig[collection];
+                    const result = await value.call(target, file, config, one, opts);
+                    if (!keys)
+                        return result;
+                    const matches = convertResultToArray(result);
+                    if (matches.length > 0) {
+                        const pms = await getPMs(collection, keys);
+                        await removeFromIndexByData(matches, fileNum, keys, pms);
+                    }
+                    return result;
+                };
+            }
+            if (prop === "update") {
+                return async (file, config, one, opts) => {
+                    const { collection, fileNum } = getCollectionAndFileNum(file, action.folder);
+                    const keys = indexConfig[collection];
+                    if (!keys)
+                        return await value.call(target, file, config, one, opts);
+                    const findResults = await target.find(file, config, opts);
+                    if (!findResults || findResults.length === 0)
+                        return one ? null : [];
+                    const result = await value.call(target, file, config, one, opts);
+                    const pms = await getPMs(collection, keys);
+                    await updateIndex(findResults, convertResultToArray(result), fileNum, keys, pms);
+                    return result;
+                };
+            }
+            return value.bind(target);
+        },
+    });
+    const indexDirAction = action;
+    indexDirAction.createIndex = async (collection) => {
+        const keys = indexConfig[collection];
+        if (!keys)
+            return;
+        const colMap = pmCaches.get(collection);
+        if (colMap) {
+            for (const pm of colMap.values()) {
+                await pm.close();
+            }
+            colMap.clear();
+        }
+        await createIndex(action, collection, keys);
+        for (const key of keys) {
+            indexExistsCache.set(`${collection}:${key}`, true);
+        }
+    };
+    return indexDirAction;
+}
