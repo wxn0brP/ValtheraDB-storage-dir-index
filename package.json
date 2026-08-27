@@ -15,16 +15,14 @@
     "scripts": {
         "build": "tsc && tsc-alias"
     },
-    "peerDependencies": {
-        "@wxn0brp/db-core": "^0.12.0",
-        "@wxn0brp/db-storage-dir": "^0.120.1"
+    "dependencies": {
+        "@wxn0brp/ac": "^0.1.0",
+        "@wxn0brp/db-core": "^0.12.2",
+        "@wxn0brp/db-storage-dir": "^0.120.2"
     },
     "devDependencies": {
         "@types/bun": "*",
         "@wxn0brp/biome": "*",
-        "@wxn0brp/db": "^0.120.0",
-        "@wxn0brp/db-core": "^0.12.0",
-        "@wxn0brp/db-storage-dir": "^0.120.1",
         "tsc-alias": "^1",
         "typescript": "^7"
     },
@@ -42,8 +40,5 @@
             "import": "./dist/*.js",
             "default": "./dist/*.js"
         }
-    },
-    "dependencies": {
-        "@wxn0brp/ac": "^0.1.0"
     }
 }
